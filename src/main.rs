@@ -47,12 +47,8 @@ async fn process(stream: &mut TcpStream) -> Result<()> {
                 .position(|(k, _)| k == b"User-Agent")
                 .ok_or(anyhow::anyhow!("User-Agent not found"))?;
             let (_, ua) = headers[i];
-            stream
-                .write_all("HTTP/1.1 200 OK\r\n\r\n".as_bytes())
-                .await?;
-            stream
-                .write_all("Content-Type: text/plain\r\n".as_bytes())
-                .await?;
+            stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
+            stream.write_all(b"Content-Type: text/plain\r\n").await?;
             stream
                 .write_all(format!("Content-Length: {}\r\n\r\n", ua.len()).as_bytes())
                 .await?;
