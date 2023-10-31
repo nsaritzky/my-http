@@ -30,13 +30,14 @@ async fn process(stream: &mut TcpStream) -> Result<()> {
         [b""] => {
             stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
         }
-        [b"echo", s] => {
+        [b"echo", rest @ ..] => {
+            let s = rest.join(&b'/');
             stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
             stream.write_all(b"Content-Type: text/plain\r\n").await?;
             stream
                 .write_all(format!("Content-Length: {}\r\n\r\n", s.len()).as_bytes())
                 .await?;
-            stream.write_all(s).await?;
+            stream.write_all(&s).await?;
         }
         &_ => {
             stream.write_all(b"HTTP/1.1 404 NOT FOUND\r\n\r\n").await?;
