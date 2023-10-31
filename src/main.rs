@@ -1,4 +1,7 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
+use nom::bytes::complete::take_until;
+use nom::sequence::preceded;
+use nom::{bytes::complete::tag, IResult};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
@@ -17,7 +20,21 @@ async fn main() -> Result<()> {
 async fn process(stream: &mut TcpStream) -> Result<()> {
     let mut buf = [0; 1024];
     stream.read(&mut buf).await?;
-
-    stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
+    let (_rest, path) = match parse_request(&buf) {
+        Ok((rest, path)) => (rest, path),
+        Err(e) => bail!("{e}"),
+    };
+    match path {
+        b"/" => {
+            stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
+        }
+        &_ => {
+            stream.write_all(b"HTTP/1.1 404 NOT FOUND\r\n\r\n").await?;
+        }
+    }
     Ok(())
+}
+
+fn parse_request(input: &[u8]) -> IResult<&[u8], &[u8]> {
+    preceded(tag("GET "), take_until(" HTTP/1.1\r\n"))(input)
 }
