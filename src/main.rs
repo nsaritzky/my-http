@@ -11,7 +11,7 @@ async fn main() -> Result<()> {
     match listener.accept().await {
         Ok((mut stream, _)) => {
             println!("accepted new connection");
-            stream.write_all(b"HTTP/1.1 200 OK/r/n/r/n").await?;
+            stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").await?;
         }
         Err(e) => {
             println!("error: {}", e);
