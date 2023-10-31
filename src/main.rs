@@ -27,6 +27,9 @@ async fn process(stream: &mut TcpStream) -> Result<()> {
         Err(e) => bail!("{e}"),
     };
     match &path[..] {
+        [b""] => {
+            stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
+        }
         [b"echo", s] => {
             stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
             stream.write_all(b"Content-Type: text/plain\r\n").await?;
