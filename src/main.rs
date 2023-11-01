@@ -49,7 +49,9 @@ async fn process(stream: &mut TcpStream, dir_arg: Arc<Option<String>>) -> Result
                     println!("path: {}", path);
                     let content = std::fs::read(path.clone())?;
                     stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
-                    stream.write_all(b"Content-Type: octet-stream\r\n").await?;
+                    stream
+                        .write_all(b"Content-Type: application/octet-stream\r\n")
+                        .await?;
                     stream
                         .write_all(format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes())
                         .await?;
