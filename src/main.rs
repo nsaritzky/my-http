@@ -5,22 +5,23 @@ use nom::character::is_space;
 use nom::multi::many0;
 use nom::sequence::{delimited, preceded, separated_pair, terminated};
 use nom::{bytes::complete::tag, IResult};
+use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // You can use print statements as follows for debugging, they'll be visible when running tests.
-    println!("Logs from your program will appear here!");
-
     let listener = TcpListener::bind("127.0.0.1:4221").await?;
+    let dir_arg = Arc::new(std::env::args().nth(2));
+
     loop {
         let (mut stream, _addr) = listener.accept().await?;
-        tokio::spawn(async move { process(&mut stream).await.expect("process failed") });
+        let dir_arg = Arc::clone(&dir_arg);
+        tokio::spawn(async move { process(&mut stream, dir_arg).await.expect("process failed") });
     }
 }
 
-async fn process(stream: &mut TcpStream) -> Result<()> {
+async fn process(stream: &mut TcpStream, dir_arg: Arc<Option<String>>) -> Result<()> {
     let mut buf = [0; 1024];
     stream.read(&mut buf).await?;
     let (rest, path) = match parse_path(&buf) {
@@ -39,6 +40,24 @@ async fn process(stream: &mut TcpStream) -> Result<()> {
                 .write_all(format!("Content-Length: {}\r\n\r\n", s.len()).as_bytes())
                 .await?;
             stream.write_all(&s).await?;
+        }
+        [b"files", filename] => {
+            let target_filename = String::from_utf8(filename.to_vec()).unwrap();
+            println!("target_filename: {}", target_filename);
+            if let Some(dir) = dir_arg.as_ref() {
+                if let Some(path) = search_directory_for_file(&dir, &target_filename) {
+                    println!("path: {}", path);
+                    let content = std::fs::read(path.clone())?;
+                    stream.write_all(b"HTTP/1.1 200 OK\r\n").await?;
+                    stream.write_all(b"Content-Type: octet-stream\r\n").await?;
+                    stream
+                        .write_all(format!("Content-Length: {}\r\n\r\n", content.len()).as_bytes())
+                        .await?;
+                    stream.write_all(&content).await?;
+                } else {
+                    stream.write_all(b"HTTP/1.1 404 NOT FOUND\r\n\r\n").await?;
+                }
+            }
         }
         [b"user-agent"] => {
             let (_rest0, headers) = parse_headers(&rest).map_err(|e| anyhow::anyhow!("{e}"))?;
@@ -59,6 +78,22 @@ async fn process(stream: &mut TcpStream) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn search_directory_for_file(directory: &str, target_filename: &str) -> Option<String> {
+    println!("directory: {}", directory);
+    if let Ok(entries) = std::fs::read_dir(directory) {
+        for entry in entries {
+            if let Ok(entry) = entry {
+                if let Some(filename) = entry.file_name().to_str() {
+                    if filename == target_filename {
+                        return Some(entry.path().to_string_lossy().into_owned());
+                    }
+                }
+            }
+        }
+    }
+    None
 }
 
 fn parse_header(input: &[u8]) -> IResult<&[u8], (&[u8], &[u8])> {
